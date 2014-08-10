@@ -1,0 +1,62 @@
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".MainActivity" >
+
+        <EditText
+            android:id="@+id/ID_Url"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_alignParentTop="true"
+            android:background="#202060"
+            android:ems="10"
+            android:inputType="textUri"
+            android:paddingBottom="4dp"
+            android:paddingTop="4dp"
+            android:textColor="#ffffff" />
+
+        <ScrollView
+            android:id="@+id/ID_WordScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="140dp"
+            android:layout_alignParentBottom="true"
+            android:background="#202020"
+            android:paddingBottom="4dp"
+            android:paddingTop="4dp" >
+        
+	        <TextView
+    	        android:id="@+id/ID_TxtWord"
+        	    android:layout_width="match_parent"
+            	android:layout_height="wrap_content"
+    	        android:textSize="20sp"
+        	    android:textColor="#ffffff" />
+        
+        </ScrollView>
+        
+        <ScrollView
+            android:id="@+id/ID_ArticlesScrollView"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_above="@id/ID_WordScrollView"
+            android:layout_below="@id/ID_Url"
+            android:background="#ffffff"
+            android:paddingBottom="4dp"
+            android:paddingLeft="40dp"
+            android:paddingTop="4dp" >
+
+            <TextView
+                android:id="@+id/ID_TxtView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autoLink="none"
+                android:background="#ffffff"
+                android:textColor="#000000"
+                android:textColorLink="#000000"
+                android:textSize="28sp"
+                android:textStyle="normal"
+                android:typeface="normal" />
+
+        </ScrollView>
+        
+</RelativeLayout>
