@@ -14,6 +14,9 @@ import java.util.Map;
 
 import jp.co.kanekotakuo.englishbrowser.Tag.IgnoreTag;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.app.AlertDialog.Builder;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Environment;
@@ -27,8 +30,10 @@ import android.text.method.LinkMovementMethod;
 import android.text.style.ClickableSpan;
 import android.util.Log;
 import android.view.KeyEvent;
+import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
+import android.view.View.OnClickListener;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
 import android.widget.TextView;
@@ -41,6 +46,10 @@ public class MainActivity extends Activity {
 	private Tag mRoot = null;
 	private IgnoreTag mNoDispTag = new IgnoreTag("span", "class", "kana");
 	private boolean mIsWriteHtmlToFile = false;
+	private Dictionary mDictionary;
+	private String mWord;
+	private AlertDialog mWordDialog;
+	private EditText mWordDialogEtx;
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -60,31 +69,64 @@ public class MainActivity extends Activity {
 			public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
 				if (actionId == EditorInfo.IME_ACTION_DONE) {
 					String url = v.getText().toString();
-					if (!TextUtils.isEmpty(url)) {
-						if (!url.startsWith("http://")) {
-							url = "http://" + url;
-						}
-						Log.i("", "url:" + url);
-						final String fUrl = url;
-						Thread th = new Thread(new Runnable() {
-
-							@Override
-							public void run() {
-								try {
-									mRoot = getAndParseHtml(fUrl);
-									parseArticle(mRoot);
-								} catch (IOException e) {
-									e.printStackTrace();
-								}
-							}
-						});
-						th.start();
+					if (TextUtils.isEmpty(url)) return false;
+					if (!url.startsWith("http://")) {
+						url = "http://" + url;
 					}
+					Log.i("", "url:" + url);
+					final String fUrl = url;
+					Thread th = new Thread(new Runnable() {
+						@Override
+						public void run() {
+							try {
+								mRoot = getAndParseHtml(fUrl);
+								parseArticle(mRoot);
+							} catch (IOException e) {
+								e.printStackTrace();
+							}
+						}
+					});
+					th.start();
 				}
 				return false;
 			}
 		});
 		mEditTxtUrl.setText("http://www.japantimes.co.jp");
+
+		Builder bld = new AlertDialog.Builder(this);
+		LayoutInflater inf = LayoutInflater.from(this);
+		View v = inf.inflate(R.layout.word_dialog, null);
+		mWordDialogEtx = (EditText) v.findViewById(R.id.ETX_word);
+		bld.setView(v);
+		bld.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+				mTxtWord.requestFocus();
+				String ss = mWordDialogEtx.getText().toString();
+				if (ss != null && !ss.isEmpty()) {
+					searchWord(ss);
+				}
+			}
+		});
+		bld.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+			public void onClick(DialogInterface dialog, int whichButton) {
+				mTxtWord.requestFocus();
+			}
+		});
+		mWordDialog = bld.create();
+
+		mDictionary = new Dictionary(this.getApplicationContext());
+	}
+
+	@Override
+	public void onResume() {
+		super.onResume();
+		mDictionary.open();
+	}
+
+	@Override
+	public void onPause() {
+		super.onPause();
+		mDictionary.close();
 	}
 
 	/**
@@ -165,6 +207,8 @@ public class MainActivity extends Activity {
 			@Override
 			public void run() {
 				mTxtView.setText(sb);
+				mTxtWord.setFocusable(true);
+				mTxtWord.setFocusableInTouchMode(true);
 			}
 		});
 	}
@@ -191,6 +235,12 @@ public class MainActivity extends Activity {
 	}
 
 	private void searchWord(final String word) {
+		String explain = mDictionary.find(word);
+		if (explain != null) {
+			Log.e("", "Found : " + word);
+			setExplainText(word, explain);
+			return;
+		}
 		final String fUrl = "http://eow.alc.co.jp/search?q=" + word;
 
 		Thread th = new Thread(new Runnable() {
@@ -199,22 +249,35 @@ public class MainActivity extends Activity {
 			public void run() {
 				try {
 					Tag root = getAndParseHtml(fUrl);
-					final String res = parseDictionary(root);
-					if (res == null) return;
-					runOnUiThread(new Runnable() {
-
-						@Override
-						public void run() {
-							Spanned h = Html.fromHtml(word + res);
-							mTxtWord.setText(h);
-						}
-					});
+					final String explain = parseDictionary(root);
+					if (explain == null) return;
+					mDictionary.register(word, explain);
+					setExplainText(word, explain);
 				} catch (IOException e) {
 					e.printStackTrace();
 				}
 			}
 		});
 		th.start();
+	}
+
+	private void setExplainText(final String word, final String res) {
+		mWord = word;
+		mTxtWord.setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				mWordDialogEtx.setText(word);
+				mWordDialogEtx.setSelection(word.length());
+				mWordDialog.show();
+			}
+		});
+		runOnUiThread(new Runnable() {
+			@Override
+			public void run() {
+				Spanned h = Html.fromHtml(word + res);
+				mTxtWord.setText(h);
+			}
+		});
 	}
 
 	protected String parseDictionary(Tag root) {
@@ -256,7 +319,6 @@ public class MainActivity extends Activity {
 
 	@Override
 	public boolean onCreateOptionsMenu(Menu menu) {
-		// Inflate the menu; this adds items to the action bar if it is present.
 		getMenuInflater().inflate(R.menu.activity_main, menu);
 		return true;
 	}
