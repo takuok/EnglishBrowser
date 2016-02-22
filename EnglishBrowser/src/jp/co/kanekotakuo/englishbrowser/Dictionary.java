@@ -5,6 +5,7 @@ import android.content.Context;
 import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
+import android.util.Log;
 
 public class Dictionary {
 	private Context mCtxt;
@@ -71,6 +72,13 @@ public class Dictionary {
 		}
 
 		public void insert(String word, String explain) {
+			if (find(word) != null) {
+				try {
+					mDb.delete(TABLE_NAME, "word = ?", new String[] { word });
+				} catch (Exception e) {
+					Log.w("", "delete / " + e);
+				}
+			}
 			ContentValues values = new ContentValues();
 			values.put("word", word);
 			values.put("explain", explain);

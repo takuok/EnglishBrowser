@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -16,6 +17,7 @@ import jp.co.kanekotakuo.englishbrowser.Tag.IgnoreTag;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.AlertDialog.Builder;
+import android.app.Dialog;
 import android.content.DialogInterface;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -34,22 +36,25 @@ import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.View;
 import android.view.View.OnClickListener;
+import android.view.View.OnLongClickListener;
 import android.view.inputmethod.EditorInfo;
 import android.widget.EditText;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.TextView.OnEditorActionListener;
 
 public class MainActivity extends Activity {
 	private EditText mEditTxtUrl;
+	private ScrollView mScrlViewWord;
 	private TextView mTxtView;
 	private TextView mTxtWord;
-	private Tag mRoot = null;
 	private IgnoreTag mNoDispTag = new IgnoreTag("span", "class", "kana");
 	private boolean mIsWriteHtmlToFile = false;
 	private Dictionary mDictionary;
 	private String mWord;
 	private AlertDialog mWordDialog;
 	private EditText mWordDialogEtx;
+	private Map<String, Tag> mHtmlMap = new HashMap<String, Tag>();
 
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
@@ -60,38 +65,42 @@ public class MainActivity extends Activity {
 		// mTxtView.setMovementMethod(ScrollingMovementMethod.getInstance());
 		mTxtView.setMovementMethod(LinkMovementMethod.getInstance());
 
+		mScrlViewWord = (ScrollView) this.findViewById(R.id.ID_WordScrollView);
+
 		mTxtWord = (TextView) this.findViewById(R.id.ID_TxtWord);
+
+		this.findViewById(R.id.BTN_left).setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				procNextArticle(-1);
+			}
+		});
+		this.findViewById(R.id.BTN_right).setOnClickListener(new OnClickListener() {
+			@Override
+			public void onClick(View v) {
+				procNextArticle(1);
+			}
+		});
 
 		mEditTxtUrl = (EditText) this.findViewById(R.id.ID_Url);
 		mEditTxtUrl.setOnEditorActionListener(new OnEditorActionListener() {
 
 			@Override
 			public boolean onEditorAction(TextView v, int actionId, KeyEvent event) {
-				if (actionId == EditorInfo.IME_ACTION_DONE) {
+				if (actionId == EditorInfo.IME_ACTION_DONE || actionId == EditorInfo.IME_ACTION_NEXT) {
 					String url = v.getText().toString();
 					if (TextUtils.isEmpty(url)) return false;
 					if (!url.startsWith("http://")) {
 						url = "http://" + url;
 					}
 					Log.i("", "url:" + url);
-					final String fUrl = url;
-					Thread th = new Thread(new Runnable() {
-						@Override
-						public void run() {
-							try {
-								mRoot = getAndParseHtml(fUrl);
-								parseArticle(mRoot);
-							} catch (IOException e) {
-								e.printStackTrace();
-							}
-						}
-					});
-					th.start();
+					procUrl(url);
 				}
 				return false;
 			}
 		});
-		mEditTxtUrl.setText("http://www.japantimes.co.jp");
+		// mEditTxtUrl.setText("http://www.japantimes.co.jp");
+		mEditTxtUrl.setText("http://k.nhk.jp/daily/index1.html");
 
 		Builder bld = new AlertDialog.Builder(this);
 		LayoutInflater inf = LayoutInflater.from(this);
@@ -130,6 +139,50 @@ public class MainActivity extends Activity {
 	}
 
 	/**
+	 * 
+	 * @param url
+	 */
+	private void procUrl(String url) {
+		final String fUrl = url;
+		Thread th = new Thread(new Runnable() {
+			@Override
+			public void run() {
+				try {
+					Tag root = mHtmlMap.get(fUrl);
+					if (root == null) {
+						root = getAndParseHtml(fUrl);
+						mHtmlMap.put(fUrl, root);
+					}
+					parseArticle(root);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+			}
+		});
+		th.start();
+	}
+
+	private void procNextArticle(int d) {
+		if (mEditTxtUrl == null) return;
+		String url = mEditTxtUrl.getText().toString();
+		if (TextUtils.isEmpty(url)) return;
+		final String pre = "index";
+		final int pre_len = pre.length();
+		int i = url.indexOf(pre);
+		if (i < 0) return;
+		i += pre_len;
+		if (url.length() < i) return;
+		try {
+			int n = Integer.parseInt(url.substring(i, i + 1)) + d;
+			if (n < 1 || n > 9) return;
+			url = url.substring(0, i) + n + url.substring(i + 1);
+			procUrl(url);
+		} catch (Exception e) {
+			return;
+		}
+	}
+
+	/**
 	 * HTMLÇÃéÊìæÇ∆ÉpÅ[ÉX
 	 * 
 	 * @param urlStr
@@ -164,7 +217,20 @@ public class MainActivity extends Activity {
 		return HtmlParser.parse(body);
 	}
 
-	private void parseArticle(Tag root) {
+	private String parseArticleSub(Tag root) {
+		StringBuffer sb = new StringBuffer();
+		List<Tag> articles = root.collect("hr");
+		for (Tag a : articles) {
+			String text = a.text;
+			if (text == null || text.isEmpty()) continue;
+			if (text.length() < 10) continue;
+			sb.append(text);
+			sb.append("\n  - - - - - - - -\n");
+		}
+		return sb.toString();
+	}
+
+	private String _parseArticleSub(Tag root) {
 		String s = "";
 		List<Tag> articles = root.collect("article");
 		int i = 1;
@@ -175,7 +241,12 @@ public class MainActivity extends Activity {
 				s += p.text + "\n  - - - - - - - -\n";
 			}
 		}
+		return s;
+	}
 
+	private void parseArticle(Tag root) {
+		String s = parseArticleSub(root);
+		s = decodeEscape(s);
 		final SpannableStringBuilder sb = new SpannableStringBuilder();
 		int st = 0;
 		int ed = 0;
@@ -202,6 +273,7 @@ public class MainActivity extends Activity {
 			appendStrToSbAsSpan(sb, ss);
 			st = ed;
 		}
+
 		this.runOnUiThread(new Runnable() {
 
 			@Override
@@ -211,6 +283,24 @@ public class MainActivity extends Activity {
 				mTxtWord.setFocusableInTouchMode(true);
 			}
 		});
+	}
+
+	private String decodeEscape(String s) {
+		final int esc_len = 6;
+		for (int i = 0; i < 100; i++) {
+			int idx = s.indexOf("&#");
+			if (idx < 0 || s.length() < idx + esc_len) break;
+			String esc = s.substring(idx, idx + esc_len);
+			if (esc.charAt(esc_len - 1) != ';') break;
+			try {
+				char ch = (char) Integer.parseInt(esc.substring(2, 5), 10);
+				String rep = Character.toString(ch);
+				s = s.substring(0, idx) + rep + s.substring(idx + esc_len);
+			} catch (Exception e) {
+				break;
+			}
+		}
+		return s;
 	}
 
 	private void appendStrToSbAsSpan(SpannableStringBuilder sb, final String ss) {
@@ -226,8 +316,8 @@ public class MainActivity extends Activity {
 
 			@Override
 			public void onClick(View widget) {
-				// Toast.makeText(getApplicationContext(), ss,
-				// Toast.LENGTH_SHORT).show();
+				widget.invalidate();
+				mWord = null;
 				searchWord(ss);
 			}
 		};
@@ -262,10 +352,11 @@ public class MainActivity extends Activity {
 	}
 
 	private void setExplainText(final String word, final String res) {
-		mWord = word;
+		if (word == null) return;
 		mTxtWord.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
+				mWord = word;
 				mWordDialogEtx.setText(word);
 				mWordDialogEtx.setSelection(word.length());
 				mWordDialog.show();
@@ -278,6 +369,40 @@ public class MainActivity extends Activity {
 				mTxtWord.setText(h);
 			}
 		});
+		if (mWord == null || word.equals(mWord)) {
+			mTxtWord.setLongClickable(false);
+		} else {
+			mTxtWord.setLongClickable(false);
+			mTxtWord.setOnLongClickListener(new OnLongClickListener() {
+				@Override
+				public boolean onLongClick(View v) {
+					AlertDialog.Builder b = new AlertDialog.Builder(MainActivity.this);
+					b.setTitle("ï ñºìoò^: " + mWord);
+					b.setPositiveButton("ìoò^", new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+							String explain = mDictionary.find(word);
+							if (TextUtils.isEmpty(explain)) return;
+							StringBuffer sb = new StringBuffer();
+							sb.append(mDictionary.find(mWord));
+							sb.append("ÅÑ");
+							sb.append(mWord);
+							sb.append(explain);
+							mDictionary.register(mWord, sb.toString());
+						}
+					});
+					b.setNegativeButton("ÉLÉÉÉìÉZÉã", new DialogInterface.OnClickListener() {
+						@Override
+						public void onClick(DialogInterface dialog, int which) {
+						}
+					});
+					Dialog dlg = b.create();
+					dlg.show();
+					return true;
+				}
+			});
+		}
+		mScrlViewWord.scrollTo(0, 0);
 	}
 
 	protected String parseDictionary(Tag root) {

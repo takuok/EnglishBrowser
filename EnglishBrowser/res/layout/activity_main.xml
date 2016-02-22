@@ -5,16 +5,45 @@
     android:orientation="vertical"
     tools:context=".MainActivity" >
 
-    <EditText
-        android:id="@+id/ID_Url"
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="#202060"
-        android:ems="10"
-        android:inputType="textUri"
-        android:paddingBottom="4dp"
-        android:paddingTop="4dp"
-        android:textColor="#ffffff" />
+        android:orientation="horizontal"
+         >
+
+        <Button
+            android:id="@+id/BTN_right"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="64dp"
+            android:layout_height="48dp"
+            android:layout_alignParentRight="true"
+            android:text="→" />
+        
+        <Button
+            android:id="@+id/BTN_left"
+            style="?android:attr/buttonStyleSmall"
+            android:layout_width="64dp"
+            android:layout_height="48dp"
+            android:layout_toLeftOf="@id/BTN_right"
+            android:text="←" />
+
+        <EditText
+            android:id="@+id/ID_Url"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_toLeftOf="@id/BTN_left"
+            android:background="#202060"
+            android:ems="10"
+            android:inputType="textUri"
+            android:paddingBottom="4dp"
+            android:paddingTop="4dp"
+            android:textColor="#ffffff"
+            android:textCursorDrawable="@drawable/style_cursor" >
+
+            <requestFocus />
+        </EditText>
+
+    </RelativeLayout>
 
     <LinearLayout
         android:layout_width="match_parent"
