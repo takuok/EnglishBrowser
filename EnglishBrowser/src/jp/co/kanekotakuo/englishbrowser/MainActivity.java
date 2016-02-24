@@ -11,7 +11,9 @@ import java.net.URL;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 import jp.co.kanekotakuo.englishbrowser.Tag.IgnoreTag;
 import android.app.Activity;
@@ -45,6 +47,7 @@ import android.widget.TextView.OnEditorActionListener;
 
 public class MainActivity extends Activity {
 	private EditText mEditTxtUrl;
+	private ScrollView mScrlViewArticle;
 	private ScrollView mScrlViewWord;
 	private TextView mTxtView;
 	private TextView mTxtWord;
@@ -65,6 +68,7 @@ public class MainActivity extends Activity {
 		// mTxtView.setMovementMethod(ScrollingMovementMethod.getInstance());
 		mTxtView.setMovementMethod(LinkMovementMethod.getInstance());
 
+		mScrlViewArticle = (ScrollView) this.findViewById(R.id.ID_ArticlesScrollView);
 		mScrlViewWord = (ScrollView) this.findViewById(R.id.ID_WordScrollView);
 
 		mTxtWord = (TextView) this.findViewById(R.id.ID_TxtWord);
@@ -94,6 +98,7 @@ public class MainActivity extends Activity {
 						url = "http://" + url;
 					}
 					Log.i("", "url:" + url);
+					mHtmlMap.clear();
 					procUrl(url);
 				}
 				return false;
@@ -176,6 +181,7 @@ public class MainActivity extends Activity {
 			int n = Integer.parseInt(url.substring(i, i + 1)) + d;
 			if (n < 1 || n > 9) return;
 			url = url.substring(0, i) + n + url.substring(i + 1);
+			mEditTxtUrl.setText(url);
 			procUrl(url);
 		} catch (Exception e) {
 			return;
@@ -198,7 +204,10 @@ public class MainActivity extends Activity {
 		con.connect();
 
 		Map<String, List<String>> headers = con.getHeaderFields();
-		Iterator<String> headerIt = headers.keySet().iterator();
+		if (headers == null) return null;
+		Set<String> keySet = headers.keySet();
+		if (keySet == null) return null;
+		Iterator<String> headerIt = keySet.iterator();
 		String header = null;
 		while (headerIt.hasNext()) {
 			String headerKey = (String) headerIt.next();
@@ -273,6 +282,9 @@ public class MainActivity extends Activity {
 			appendStrToSbAsSpan(sb, ss);
 			st = ed;
 		}
+		if (st > ed) {
+			sb.append(s.substring(ed));
+		}
 
 		this.runOnUiThread(new Runnable() {
 
@@ -281,11 +293,14 @@ public class MainActivity extends Activity {
 				mTxtView.setText(sb);
 				mTxtWord.setFocusable(true);
 				mTxtWord.setFocusableInTouchMode(true);
+				mScrlViewArticle.scrollTo(0, 0);
 			}
 		});
 	}
 
 	private String decodeEscape(String s) {
+		if (s == null) return s;
+		s = s.replaceAll("&quot;", "\"");
 		final int esc_len = 6;
 		for (int i = 0; i < 100; i++) {
 			int idx = s.indexOf("&#");
@@ -324,7 +339,8 @@ public class MainActivity extends Activity {
 		sb.setSpan(cs, len, len + ss.length(), Spannable.SPAN_INCLUSIVE_EXCLUSIVE);
 	}
 
-	private void searchWord(final String word) {
+	private void searchWord(final String wordArg) {
+		final String word = (wordArg == null) ? null : wordArg.toLowerCase(Locale.US);
 		String explain = mDictionary.find(word);
 		if (explain != null) {
 			Log.e("", "Found : " + word);
@@ -340,8 +356,9 @@ public class MainActivity extends Activity {
 				try {
 					Tag root = getAndParseHtml(fUrl);
 					final String explain = parseDictionary(root);
-					if (explain == null) return;
-					mDictionary.register(word, explain);
+					if (explain != null) {
+						mDictionary.register(word, explain);
+					}
 					setExplainText(word, explain);
 				} catch (IOException e) {
 					e.printStackTrace();
@@ -356,7 +373,9 @@ public class MainActivity extends Activity {
 		mTxtWord.setOnClickListener(new OnClickListener() {
 			@Override
 			public void onClick(View v) {
-				mWord = word;
+				if (mWord == null) {
+					mWord = word;
+				}
 				mWordDialogEtx.setText(word);
 				mWordDialogEtx.setSelection(word.length());
 				mWordDialog.show();
@@ -365,7 +384,9 @@ public class MainActivity extends Activity {
 		runOnUiThread(new Runnable() {
 			@Override
 			public void run() {
-				Spanned h = Html.fromHtml(word + res);
+				String s = word;
+				if (res != null) s += res;
+				Spanned h = Html.fromHtml(s);
 				mTxtWord.setText(h);
 			}
 		});
@@ -384,9 +405,10 @@ public class MainActivity extends Activity {
 							String explain = mDictionary.find(word);
 							if (TextUtils.isEmpty(explain)) return;
 							StringBuffer sb = new StringBuffer();
-							sb.append(mDictionary.find(mWord));
+							String orgExplain = mDictionary.find(mWord);
+							if (orgExplain != null) sb.append(orgExplain);
 							sb.append("„");
-							sb.append(mWord);
+							sb.append(word);
 							sb.append(explain);
 							mDictionary.register(mWord, sb.toString());
 						}
@@ -406,6 +428,7 @@ public class MainActivity extends Activity {
 	}
 
 	protected String parseDictionary(Tag root) {
+		if (root == null) return null;
 		Tag rl = root.find("div", "resultsList");
 		if (rl == null) return null;
 		Tag ul = rl.find("ul");
